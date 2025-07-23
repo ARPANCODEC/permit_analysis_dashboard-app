@@ -1,0 +1,17 @@
+{
+    "admin": {
+        "name": "Administrator",
+        "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+        "role": "admin"
+    },
+    "arpan": {
+        "name": "Arpan Ari",
+        "password_hash": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5",
+        "role": "user"
+    },
+    "xyz": {
+        "name": "XYZ ABC ",
+        "password_hash": "ef0504cb7d1ab962a6826f4d35801966c2b98c2e5ea877fb7e670aead8526e38",
+        "role": "user"
+    }
+}
