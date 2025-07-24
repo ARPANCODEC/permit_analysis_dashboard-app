@@ -43,7 +43,9 @@ if 'auth' not in st.session_state:
         'username': None,
         'failed_attempts': 0,
         'is_admin': False,
-        'show_register': False
+        'show_register': False,
+        'user_added': False,
+        'user_removed': False
     }
 
 def register_user(username, name, password, role="user"):
@@ -60,7 +62,24 @@ def register_user(username, name, password, role="user"):
         "role": role
     }
     save_users(USERS)
+    st.session_state.auth['user_added'] = True
     return True, f"User {username} registered successfully!"
+
+def remove_user(username):
+    """Remove a user from the system"""
+    if username not in USERS:
+        return False, "User does not exist!"
+    
+    if username == "admin":
+        return False, "Cannot delete the admin user!"
+    
+    if username == st.session_state.auth['username']:
+        return False, "Cannot delete your own account while logged in!"
+    
+    del USERS[username]
+    save_users(USERS)
+    st.session_state.auth['user_removed'] = True
+    return True, f"User {username} removed successfully!"
 
 def authenticate(username, password):
     """Authenticate user credentials"""
@@ -71,7 +90,9 @@ def authenticate(username, password):
             'username': username,
             'failed_attempts': 0,
             'is_admin': user.get('role', 'user') == 'admin',
-            'show_register': False
+            'show_register': False,
+            'user_added': False,
+            'user_removed': False
         }
         st.rerun()
     else:
@@ -88,7 +109,9 @@ def logout():
         'username': None,
         'failed_attempts': 0,
         'is_admin': False,
-        'show_register': False
+        'show_register': False,
+        'user_added': False,
+        'user_removed': False
     }
     st.rerun()
 
@@ -113,7 +136,8 @@ def show_login():
             new_password = st.text_input("Password", type="password")
             confirm_password = st.text_input("Confirm Password", type="password")
             
-            if st.form_submit_button("Register"):
+            submitted = st.form_submit_button("Register")
+            if submitted:
                 if new_password != confirm_password:
                     st.error("Passwords do not match!")
                 else:
@@ -128,7 +152,8 @@ def show_login():
             st.subheader("Login to Dashboard")
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
+            submitted = st.form_submit_button("Login")
+            if submitted:
                 authenticate(username, password)
 
 # ============================================
@@ -144,17 +169,27 @@ st.set_page_config(page_title="Permit Dashboard", layout="wide")
 # Apply styling and logos
 st.markdown(set_style(), unsafe_allow_html=True)
 
-# Header with logout button
+# Header with logout button and user info
 col1, col2 = st.columns([4, 1])
 with col1:
-    st.markdown("""
+    st.markdown(f"""
         <div class='title-container'>
             <h1>📋 Permit Analysis Dashboard</h1>
+            <p class='user-info'>Logged in as: <strong>{st.session_state.auth['username']}</strong> | Role: <strong>{'Admin' if st.session_state.auth['is_admin'] else 'User'}</strong></p>
         </div>
         """, unsafe_allow_html=True)
 with col2:
     if st.button("🚪 Logout"):
         logout()
+
+# Show success messages if any
+if st.session_state.auth.get('user_added'):
+    st.success("User successfully added!")
+    st.session_state.auth['user_added'] = False
+
+if st.session_state.auth.get('user_removed'):
+    st.success("User successfully removed!")
+    st.session_state.auth['user_removed'] = False
 
 # Show user management for admins
 if st.session_state.auth['is_admin']:
@@ -163,24 +198,48 @@ if st.session_state.auth['is_admin']:
         users_df = pd.DataFrame.from_dict(USERS, orient='index').drop(columns=['password_hash'])
         st.dataframe(users_df, use_container_width=True)
         
-        with st.form("admin_add_user"):
-            st.subheader("Add New User")
-            admin_new_username = st.text_input("Username", key="admin_new_user")
-            admin_new_name = st.text_input("Full Name", key="admin_new_name")
-            admin_new_password = st.text_input("Password", type="password", key="admin_new_pass")
-            admin_new_role = st.selectbox("Role", ["user", "admin"], key="admin_new_role")
-            
-            if st.form_submit_button("Add User"):
-                success, message = register_user(
-                    admin_new_username,
-                    admin_new_name,
-                    admin_new_password,
-                    admin_new_role
-                )
-                if success:
-                    st.success(message)
+        # User management tabs
+        tab1, tab2 = st.tabs(["Add User", "Remove User"])
+        
+        with tab1:
+            with st.form("admin_add_user"):
+                st.subheader("Add New User")
+                admin_new_username = st.text_input("Username", key="admin_new_user")
+                admin_new_name = st.text_input("Full Name", key="admin_new_name")
+                admin_new_password = st.text_input("Password", type="password", key="admin_new_pass")
+                admin_new_role = st.selectbox("Role", ["user", "admin"], key="admin_new_role")
+                
+                submitted = st.form_submit_button("Add User")
+                if submitted:
+                    success, message = register_user(
+                        admin_new_username,
+                        admin_new_name,
+                        admin_new_password,
+                        admin_new_role
+                    )
+                    if success:
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
+        
+        with tab2:
+            with st.form("admin_remove_user"):
+                st.subheader("Remove User")
+                if len(USERS) > 1:  # Don't allow deleting all users
+                    removable_users = [u for u in USERS.keys() if u != "admin" and u != st.session_state.auth['username']]
+                    user_to_remove = st.selectbox("Select user to remove", removable_users)
+                    
+                    submitted = st.form_submit_button("Remove User")
+                    if submitted:
+                        success, message = remove_user(user_to_remove)
+                        if success:
+                            st.success(message)
+                            st.rerun()  # Refresh to show updated user list
+                        else:
+                            st.error(message)
                 else:
-                    st.error(message)
+                    st.warning("Cannot remove the only remaining user")
 
 # ============================================
 # MAIN DASHBOARD FUNCTIONALITY
